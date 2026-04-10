@@ -27,13 +27,34 @@ class VideoDownloader:
     def _build_opts(self, output_path: Path) -> dict:
         """
         Build yt-dlp options.
-        Downloads best quality MP4. If MP4 not available, merges best
-        video + audio into MP4 via ffmpeg.
+
+        Quality priority:
+          1. 1080p MP4 video + M4A audio  (best case)
+          2. 1080p any-format + best audio (merged to MP4)
+          3. Any 1080p+ stream available
+          4. Best available quality below 1080p (fallback if channel
+             never uploaded above 720p)
+
+        format_sort ensures that when multiple streams match the format
+        selector, yt-dlp picks the highest resolution >= 1080p first,
+        then prefers mp4/m4a containers to avoid unnecessary re-encoding.
         """
         return {
-            # Prefer a single MP4 file; fall back to merging best streams
-            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            # %(ext)s is intentionally omitted — we always get MP4
+            "format": (
+                # 1st choice: 1080p+ MP4 video + M4A audio
+                "bestvideo[height>=1080][ext=mp4]+bestaudio[ext=m4a]"
+                # 2nd choice: 1080p+ any video + M4A audio
+                "/bestvideo[height>=1080]+bestaudio[ext=m4a]"
+                # 3rd choice: 1080p+ any video + any audio
+                "/bestvideo[height>=1080]+bestaudio"
+                # Fallback: best single-file MP4 (may be below 1080p)
+                "/best[ext=mp4]"
+                # Last resort: whatever is available
+                "/best"
+            ),
+            # Sort preference when multiple streams match
+            "format_sort": ["res:1080", "ext:mp4:m4a", "fps"],
+            # %(ext)s handled by yt-dlp; always remux to MP4
             "outtmpl": str(output_path.with_suffix("")) + ".%(ext)s",
             "merge_output_format": "mp4",
             # Keep output clean
@@ -98,11 +119,14 @@ class VideoDownloader:
         output_path = DOWNLOADS_DIR / f"{video.youtube_id}.mp4"
         opts = self._build_opts(output_path)
 
-        logger.info(f"Downloading: {video.title}")
+        logger.info(f"Downloading (1080p+ preferred): {video.title}")
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(video.url, download=True)
-                duration = info.get("duration", video.duration)
+                duration   = info.get("duration", video.duration)
+                height     = info.get("height") or info.get("requested_downloads", [{}])[0].get("height")
+                resolution = f"{height}p" if height else "unknown res"
+            logger.debug(f"Downloaded at: {resolution}")
         except yt_dlp.utils.DownloadError as e:
             logger.error(f"Download failed for '{video.title}': {e}")
             self._set_status(video.id, VideoStatus.FAILED)
@@ -127,7 +151,7 @@ class VideoDownloader:
             size_mb = actual_path.stat().st_size / (1024 * 1024)
             logger.success(
                 f"Downloaded: '{video.title}' "
-                f"({duration}s, {size_mb:.1f} MB) → {actual_path.name}"
+                f"({resolution}, {duration}s, {size_mb:.1f} MB) → {actual_path.name}"
             )
             return True
 
