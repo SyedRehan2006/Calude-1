@@ -1,0 +1,46 @@
+# ── Environment & Secrets ─────────────────────────────────────────
+.env
+config/client_secrets.json
+config/token.json
+*.json.bak
+
+# ── Output Files (videos, clips, logs) ───────────────────────────
+output/downloads/*
+output/clips/*
+output/logs/*
+!output/downloads/.gitkeep
+!output/clips/.gitkeep
+!output/logs/.gitkeep
+
+# ── Database ──────────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Python ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Whisper Model Cache ───────────────────────────────────────────
+models/
+
+# ── OS ────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
