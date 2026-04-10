@@ -22,7 +22,6 @@ from config.settings import (
     CLIP_MIN_SECONDS,
     CLIP_MAX_SECONDS,
     CLIPS_PER_VIDEO,
-    DEFAULT_FORMATS,
 )
 from src.database.models import (
     Clip, ClipFormat, ClipStatus, Video, VideoStatus, SessionLocal,
@@ -98,6 +97,7 @@ class ClipDetector:
         video: Video,
         segments: list[dict],
         n_clips: Optional[int] = None,
+        fmt: ClipFormat = ClipFormat.VERTICAL,
     ) -> list[Clip]:
         """
         Run AI clip detection on a transcript.
@@ -106,6 +106,9 @@ class ClipDetector:
             video:    The Video DB record (needs title + duration).
             segments: Timestamped transcript from Transcriber.
             n_clips:  Override number of clips (defaults to CLIPS_PER_VIDEO).
+            fmt:      Output format — ClipFormat.VERTICAL (default) or
+                      ClipFormat.HORIZONTAL. Pass HORIZONTAL only when the
+                      user explicitly requests it via Telegram.
 
         Returns:
             List of saved Clip DB records with status=PENDING.
@@ -127,7 +130,10 @@ class ClipDetector:
             max_sec=CLIP_MAX_SECONDS,
         )
 
-        logger.info(f"Sending transcript to Gemini for '{video.title}' ({n} clips requested)...")
+        logger.info(
+            f"Sending transcript to Gemini for '{video.title}' "
+            f"({n} clips, {fmt.value} format)..."
+        )
 
         raw_response = self._call_gemini(prompt)
         if raw_response is None:
@@ -141,9 +147,9 @@ class ClipDetector:
         # Validate + clamp timestamps against actual video duration
         suggestions = self._validate_suggestions(suggestions, video.duration)
 
-        clips = self._save_clips(video, suggestions)
+        clips = self._save_clips(video, suggestions, fmt)
         logger.success(
-            f"Detected {len(clips)} clip(s) for '{video.title}'"
+            f"Detected {len(clips)} clip(s) for '{video.title}' [{fmt.value}]"
         )
         return clips
 
@@ -153,10 +159,14 @@ class ClipDetector:
         segments: list[dict],
         start_seconds: float,
         end_seconds: float,
+        fmt: ClipFormat = ClipFormat.VERTICAL,
     ) -> list[Clip]:
         """
         Force a specific time range into a clip (user-specified via Telegram).
         Skips AI detection — directly creates a Clip record.
+
+        fmt defaults to VERTICAL. Pass ClipFormat.HORIZONTAL when the user
+        explicitly asks for a horizontal cut of this range.
         """
         duration = end_seconds - start_seconds
         if duration < 1:
@@ -181,8 +191,8 @@ class ClipDetector:
             "reason":        "Manually specified time range by user.",
         }
 
-        clips = self._save_clips(video, [suggestion])
-        logger.info(f"Created manual clip: {title}")
+        clips = self._save_clips(video, [suggestion], fmt)
+        logger.info(f"Created manual clip: {title} [{fmt.value}]")
         return clips
 
     # ── Gemini call ───────────────────────────────────────────────
@@ -296,29 +306,30 @@ class ClipDetector:
 
     # ── DB persistence ────────────────────────────────────────────
 
-    def _save_clips(self, video: Video, suggestions: list[dict]) -> list[Clip]:
-        """Save validated clip suggestions to the Clip table."""
+    def _save_clips(
+        self,
+        video: Video,
+        suggestions: list[dict],
+        fmt: ClipFormat = ClipFormat.VERTICAL,
+    ) -> list[Clip]:
+        """Save validated clip suggestions to the Clip table as a single format."""
         db = SessionLocal()
         saved = []
         try:
             for suggestion in suggestions:
-                for fmt in DEFAULT_FORMATS:
-                    clip_format = (
-                        ClipFormat.VERTICAL if fmt == "vertical" else ClipFormat.HORIZONTAL
-                    )
-                    clip = Clip(
-                        video_id=video.id,
-                        title=suggestion["title"][:512],
-                        description=suggestion.get("description", "")[:1000],
-                        start_time=suggestion["start_seconds"],
-                        end_time=suggestion["end_seconds"],
-                        format=clip_format,
-                        has_subtitles=True,
-                        status=ClipStatus.PENDING,
-                        ai_reason=suggestion.get("reason", "")[:1000],
-                    )
-                    db.add(clip)
-                    saved.append(clip)
+                clip = Clip(
+                    video_id=video.id,
+                    title=suggestion["title"][:512],
+                    description=suggestion.get("description", "")[:1000],
+                    start_time=suggestion["start_seconds"],
+                    end_time=suggestion["end_seconds"],
+                    format=fmt,
+                    has_subtitles=True,
+                    status=ClipStatus.PENDING,
+                    ai_reason=suggestion.get("reason", "")[:1000],
+                )
+                db.add(clip)
+                saved.append(clip)
 
             # Mark video as fully processed
             vid = db.query(Video).filter_by(id=video.id).first()

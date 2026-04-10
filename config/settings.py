@@ -46,7 +46,7 @@ CLIPS_PER_VIDEO: int = int(os.getenv("CLIPS_PER_VIDEO", "5"))
 
 # Supported formats
 VALID_FORMATS = {"vertical", "horizontal"}
-_raw_formats = os.getenv("DEFAULT_FORMATS", "vertical,horizontal")
+_raw_formats = os.getenv("DEFAULT_FORMATS", "vertical")
 DEFAULT_FORMATS: list[str] = [
     f.strip() for f in _raw_formats.split(",") if f.strip() in VALID_FORMATS
 ]

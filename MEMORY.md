@@ -19,7 +19,7 @@ Build a fully automated video clipping pipeline that:
 | Preference | Decision |
 |---|---|
 | Approval interface | Telegram Bot |
-| Clip formats | Vertical 9:16 (Reels/Shorts) AND Horizontal 16:9 (Cinematic Shorts) |
+| Clip formats | Vertical 9:16 (Reels/Shorts) by default. Horizontal 16:9 only when explicitly requested via Telegram. Never both automatically. |
 | Clip length | 30–90 seconds (no hard limit required, this is a default range) |
 | Download quality | Minimum 1080p resolution + audio. Falls back to best available if channel has no 1080p content. |
 | Video language | English |
