@@ -219,7 +219,7 @@ Bot sends clip preview →
 | Phase 1 | Project foundation: structure, config, database | ✅ Done |
 | Phase 2 | Download pipeline: channel monitor + yt-dlp downloader | ✅ Done |
 | Phase 3 | AI brain: Whisper transcription + Gemini clip detection | ✅ Done |
-| Phase 4 | Clip engine: ffmpeg cutting + subtitle burning + format handling | Pending |
+| Phase 4 | Clip engine: ffmpeg cutting + subtitle burning + format handling | ✅ Done |
 | Phase 5 | Telegram bot: chat interface + approval flow | Pending |
 | Phase 6 | Uploaders: YouTube Shorts + Instagram Reels | Pending |
 | Phase 7 | Polish: end-to-end testing, error handling, logging | Pending |
