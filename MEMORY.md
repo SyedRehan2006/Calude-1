@@ -221,7 +221,7 @@ Bot sends clip preview →
 | Phase 3 | AI brain: Whisper transcription + Gemini clip detection | ✅ Done |
 | Phase 4 | Clip engine: ffmpeg cutting + subtitle burning + format handling | ✅ Done |
 | Phase 5 | Telegram bot: chat interface + approval flow | ✅ Done |
-| Phase 6 | Uploaders: YouTube Shorts + Instagram Reels | Pending |
+| Phase 6 | Uploaders: YouTube Shorts + Instagram Reels | ✅ Done |
 | Phase 7 | Polish: end-to-end testing, error handling, logging | Pending |
 
 ---

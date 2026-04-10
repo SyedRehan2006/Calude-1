@@ -62,6 +62,8 @@ from src.database.models import (
 )
 from src.monitor.channel_monitor import ChannelMonitor
 from src.pipeline import Pipeline
+from src.uploader.youtube_uploader import YouTubeUploader
+from src.uploader.instagram_uploader import InstagramUploader
 
 # Telegram's bot API limit for sendVideo
 _MAX_VIDEO_BYTES = 50 * 1024 * 1024  # 50 MB
@@ -75,8 +77,10 @@ class ClippingBot:
     """
 
     def __init__(self) -> None:
-        self.pipeline = Pipeline()
-        self.monitor  = ChannelMonitor()
+        self.pipeline  = Pipeline()
+        self.monitor   = ChannelMonitor()
+        self.yt_upload = YouTubeUploader()
+        self.ig_upload = InstagramUploader()
         # user_id → clip_id: tracks when we're waiting for re-cut timestamps
         self._recut_pending: dict[int, int] = {}
 
@@ -347,17 +351,54 @@ class ClippingBot:
     async def _on_upload(
         self, clip_id: int, platform: str, query, context: ContextTypes.DEFAULT_TYPE
     ) -> None:
-        # Upload logic wired in Phase 6
+        platform_label = {
+            "youtube":   "YouTube",
+            "instagram": "Instagram",
+            "both":      "YouTube & Instagram",
+        }.get(platform, platform)
+
         await query.edit_message_caption(
-            caption=f"{query.message.caption}\n\n⏳ Upload to *{platform}* queued.",
+            caption=f"{query.message.caption}\n\n⏳ Uploading to *{platform_label}*...",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=None,
         )
-        await context.bot.send_message(
-            TELEGRAM_USER_ID,
-            f"⚠️ Uploaders are coming in Phase 6. Clip marked as approved.",
-        )
-        self._set_status(clip_id, ClipStatus.APPROVED)
+
+        clip = self._get_clip(clip_id)
+        if not clip:
+            await context.bot.send_message(TELEGRAM_USER_ID, "❌ Clip not found.")
+            return
+
+        async def _run() -> None:
+            results = []
+
+            loop = asyncio.get_running_loop()
+
+            if platform in ("youtube", "both"):
+                url = await loop.run_in_executor(
+                    None, lambda: self.yt_upload.upload(clip)
+                )
+                if url:
+                    results.append(f"📺 YouTube: {url}")
+                else:
+                    results.append("📺 YouTube: ❌ upload failed")
+
+            if platform in ("instagram", "both"):
+                url = await loop.run_in_executor(
+                    None, lambda: self.ig_upload.upload(clip)
+                )
+                if url:
+                    results.append(f"📷 Instagram: {url}")
+                else:
+                    results.append("📷 Instagram: ❌ upload failed")
+
+            summary = "\n".join(results)
+            await context.bot.send_message(
+                TELEGRAM_USER_ID,
+                f"✅ Upload complete:\n\n{summary}",
+                disable_web_page_preview=True,
+            )
+
+        asyncio.create_task(_run())
 
     async def _on_remove_channel(self, channel_id: str, query) -> None:
         ok = self.monitor.remove_channel(channel_id)
